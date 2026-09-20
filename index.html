@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZX TikTok Photo Downloader</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- JSZip for ZIP creation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- FileSaver for triggering downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        zx: {
+                            dark: '#0a0a0c',
+                            card: '#141418',
+                            cyan: '#00f3ff',
+                            pink: '#ff00ea',
+                            purple: '#8a2be2'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            background-color: #0a0a0c;
+            color: #ffffff;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 243, 255, 0.04) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 234, 0.04) 0%, transparent 50%);
+            background-attachment: fixed;
+            overflow-x: hidden;
+        }
+
+        /* Neon Glow Effects */
+        .neon-text-cyan {
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.7), 0 0 20px rgba(0, 243, 255, 0.5);
+        }
+        .neon-text-pink {
+            text-shadow: 0 0 10px rgba(255, 0, 234, 0.7), 0 0 20px rgba(255, 0, 234, 0.5);
+        }
+        
+        .neon-border-focus:focus-within {
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3), inset 0 0 10px rgba(0, 243, 255, 0.1);
+            border-color: #00f3ff;
+        }
+
+        .btn-neon {
+            position: relative;
+            background: linear-gradient(45deg, #00f3ff, #8a2be2);
+            z-index: 1;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .btn-neon::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(45deg, #ff00ea, #8a2be2);
+            z-index: -1;
+            transition: opacity 0.3s ease;
+            opacity: 0;
+        }
+        .btn-neon:hover::before {
+            opacity: 1;
+        }
+        .btn-neon:hover {
+            box-shadow: 0 0 20px rgba(255, 0, 234, 0.4);
+            transform: translateY(-2px);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0a0a0c; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00f3ff; }
+
+        /* Loader Animation */
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 3px solid rgba(0, 243, 255, 0.3);
+            border-radius: 50%;
+            display: inline-block;
+            position: relative;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        .loader::after {
+            content: '';  
+            box-sizing: border-box;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: 3px solid;
+            border-color: #ff00ea transparent;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Toast Animations */
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        .toast-enter { animation: slideInRight 0.3s ease forwards; }
+        .toast-exit { animation: fadeOut 0.3s ease forwards; }
+
+        /* Glassmorphism */
+        .glass {
+            background: rgba(20, 20, 24, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="font-inter text-gray-200 antialiased min-h-screen flex flex-col">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <main class="flex-grow container mx-auto px-4 py-12 max-w-5xl flex flex-col items-center">
+        
+        <!-- Header -->
+        <header class="text-center mb-10 w-full">
+            <h1 class="text-5xl md:text-6xl font-orbitron font-black tracking-wider mb-2">
+                <span class="text-white">ZX</span> 
+                <span class="text-zx-cyan neon-text-cyan">TIKTOK</span>
+            </h1>
+            <h2 class="text-xl md:text-2xl font-orbitron font-bold text-zx-pink neon-text-pink mb-4">PHOTO DOWNLOADER</h2>
+            <p class="text-gray-400 max-w-xl mx-auto">Download original quality TikTok photo slideshows without watermarks. Fast, secure, and hassle-free.</p>
+        </header>
+
+        <!-- Input Area -->
+        <div class="w-full max-w-3xl glass rounded-2xl p-6 md:p-8 shadow-2xl mb-12">
+            <div class="flex flex-col md:flex-row gap-4 relative">
+                <div class="flex-grow relative border border-gray-700 rounded-xl bg-black/50 transition-all duration-300 neon-border-focus">
+                    <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                    </svg>
+                    <input type="text" id="tiktok-url" placeholder="Paste TikTok Post URL here (e.g., https://vt.tiktok.com/...)" 
+                           class="w-full bg-transparent text-white placeholder-gray-500 px-12 py-4 rounded-xl focus:outline-none font-medium">
+                </div>
+                <button id="btn-process" onclick="processUrl()" class="btn-neon font-orbitron font-bold text-white px-8 py-4 rounded-xl uppercase tracking-wider flex-shrink-0 flex items-center justify-center gap-2">
+                    <span>Get Photos</span>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                </button>
+            </div>
+            <div class="mt-3 text-xs text-center text-gray-500">
+                Note: Make sure the URL points to a Photo Slideshow post, not a standard video.
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading-state" class="hidden flex-col items-center justify-center py-12 w-full">
+            <span class="loader mb-6"></span>
+            <p id="loading-text" class="text-zx-cyan font-orbitron animate-pulse text-lg tracking-widest">EXTRACTING METADATA...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="w-full hidden flex-col">
+            
+            <!-- Result Header & Global Actions -->
+            <div class="glass rounded-xl p-4 md:p-6 mb-8 flex flex-col md:flex-row items-center justify-between border-l-4 border-zx-cyan gap-4">
+                <div class="flex items-center gap-4">
+                    <img id="author-avatar" src="" alt="Author" class="w-12 h-12 rounded-full border-2 border-zx-pink object-cover bg-gray-800">
+                    <div>
+                        <h3 id="author-name" class="font-bold text-white text-lg">@username</h3>
+                        <p id="post-stats" class="text-sm text-gray-400">Found <span id="photo-count" class="text-zx-cyan font-bold">0</span> photos</p>
+                    </div>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                    <button onclick="downloadAllPhotos()" id="btn-download-all" class="bg-zx-card border border-zx-cyan hover:bg-zx-cyan hover:text-black text-zx-cyan transition-colors px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>
+                        <span id="dl-all-text">Download All (ZIP)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Photos Grid -->
+            <div id="photos-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+                <!-- Images will be injected here via JS -->
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- State Management ---
+        let currentPhotos = [];
+        let currentAuthor = "";
+        let isProcessing = false;
+
+        // --- DOM Elements ---
+        const urlInput = document.getElementById('tiktok-url');
+        const btnProcess = document.getElementById('btn-process');
+        const loadingState = document.getElementById('loading-state');
+        const loadingText = document.getElementById('loading-text');
+        const resultsSection = document.getElementById('results-section');
+        const photosGrid = document.getElementById('photos-grid');
+        const authorAvatar = document.getElementById('author-avatar');
+        const authorName = document.getElementById('author-name');
+        const photoCount = document.getElementById('photo-count');
+        const toastContainer = document.getElementById('toast-container');
+        const btnDownloadAll = document.getElementById('btn-download-all');
+        const dlAllText = document.getElementById('dl-all-text');
+
+        // --- UI Helpers ---
+        function showToast(message, type = 'error') {
+            const toast = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-red-500/10 border-red-500 text-red-400' 
+                          : type === 'success' ? 'bg-green-500/10 border-green-500 text-green-400' 
+                          : 'bg-zx-cyan/10 border-zx-cyan text-zx-cyan';
+            
+            toast.className = `toast-enter glass border-l-4 rounded shadow-lg px-4 py-3 flex items-center gap-3 ${bgClass} backdrop-blur-md max-w-sm`;
+            toast.innerHTML = `
+                <div class="flex-grow text-sm font-medium">${message}</div>
+                <button onclick="this.parentElement.remove()" class="text-gray-400 hover:text-white">&times;</button>
+            `;
+            
+            toastContainer.appendChild(toast);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                toast.classList.replace('toast-enter', 'toast-exit');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        function setLoading(isLoading, text = "EXTRACTING METADATA...") {
+            isProcessing = isLoading;
+            if (isLoading) {
+                btnProcess.disabled = true;
+                btnProcess.classList.add('opacity-50', 'cursor-not-allowed');
+                resultsSection.classList.add('hidden');
+                loadingState.classList.remove('hidden');
+                loadingState.classList.add('flex');
+                loadingText.innerText = text;
+            } else {
+                btnProcess.disabled = false;
+                btnProcess.classList.remove('opacity-50', 'cursor-not-allowed');
+                loadingState.classList.add('hidden');
+                loadingState.classList.remove('flex');
+            }
+        }
+
+        // --- Core Logic ---
+        function isValidTikTokUrl(url) {
+            // Basic regex to ensure it's a tiktok URL
+            const regex = /tiktok\.com/i;
+            return regex.test(url);
+        }
+
+        async function processUrl() {
+            if (isProcessing) return;
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showToast("Please enter a TikTok URL.");
+                return;
+            }
+            if (!isValidTikTokUrl(url)) {
+                showToast("Invalid URL. Please enter a valid TikTok link.");
+                return;
+            }
+
+            setLoading(true);
+            
+            try {
+                // Using TikWM Public API. It's robust for fetching TikTok metadata including photos.
+                // It natively handles the extraction without needing our own backend scraper.
+                const apiUrl = `https://www.tikwm.com/api/?url=${encodeURIComponent(url)}&hd=1`;
+                
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error("API Server error. Please try again later.");
+                
+                const data = await response.json();
+                
+                if (data.code === -1) {
+                    throw new Error(data.msg || "Failed to fetch post. Ensure the account is public.");
+                }
+
+                if (!data.data) {
+                    throw new Error("Invalid response from server.");
+                }
+
+                // Check if it's a photo post
+                if (!data.data.images || data.data.images.length === 0) {
+                    throw new Error("No photos found. Ensure the URL points to a photo slideshow, not a video.");
+                }
+
+                // Store data
+                currentPhotos = data.data.images;
+                currentAuthor = data.data.author.unique_id;
+                
+                renderResults(data.data);
+                showToast("Photos extracted successfully!", "success");
+
+            } catch (error) {
+                showToast(error.message);
+                resultsSection.classList.add('hidden');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // --- Render UI ---
+        function renderResults(data) {
+            // Update Header
+            authorAvatar.src = data.author.avatar || 'https://placehold.co/100x100/141418/00f3ff?text=ZX';
+            authorName.innerText = `@${data.author.unique_id}`;
+            photoCount.innerText = data.images.length;
+            
+            // Clear previous grid
+            photosGrid.innerHTML = '';
+
+            // Render Photos
+            data.images.forEach((imgUrl, index) => {
+                const card = document.createElement('div');
+                card.className = "glass rounded-xl overflow-hidden group relative aspect-[3/4] shadow-lg border border-gray-800 hover:border-zx-cyan transition-colors";
+                
+                // Note: We use a placeholder on error just to prevent ugly broken image icons, 
+                // but the actual URL is genuine from the API.
+                card.innerHTML = `
+                    <img src="${imgUrl}" alt="TikTok Photo ${index + 1}" 
+                         class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                         loading="lazy"
+                         onerror="this.src='https://placehold.co/400x600/141418/ff00ea?text=Image+Load+Error'">
+                    
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                        <span class="text-xs font-orbitron text-zx-cyan mb-2">Photo ${index + 1}</span>
+                        <button onclick="downloadSinglePhoto('${imgUrl}', ${index})" class="bg-zx-pink text-white font-bold py-2 px-4 rounded hover:bg-white hover:text-zx-pink transition-colors w-full flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Download
+                        </button>
+                    </div>
+                `;
+                photosGrid.appendChild(card);
+            });
+
+            resultsSection.classList.remove('hidden');
+            resultsSection.classList.add('flex');
+            
+            // Reset download all button state
+            btnDownloadAll.disabled = false;
+            btnDownloadAll.classList.remove('opacity-50', 'cursor-wait');
+            dlAllText.innerText = "Download All (ZIP)";
+        }
+
+        // --- STREAMING_CHUNK:Implementing Download & CORS Bypass functions... ---
+
+        // Helper to fetch image as Blob using a CORS proxy to prevent Canvas/Download issues
+        // TikTok CDNs usually block direct blob fetching from client-side due to strict CORS.
+        async function fetchImageBlob(url) {
+            // Using allorigins as a reliable raw CORS proxy for file fetching
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Network response was not ok');
+            return await response.blob();
+        }
+
+        async function downloadSinglePhoto(url, index) {
+            try {
+                showToast(`Fetching Photo ${index + 1}...`, 'info');
+                const blob = await fetchImageBlob(url);
+                const filename = `ZX_TikTok_${currentAuthor}_photo_${index + 1}.jpeg`;
+                
+                // Use FileSaver to save the blob
+                saveAs(blob, filename);
+                showToast(`Photo ${index + 1} downloaded!`, 'success');
+            } catch (error) {
+                console.error("Download Error:", error);
+                showToast(`Failed to download Photo ${index + 1}. CORS or Network Error.`, 'error');
+            }
+        }
+
+        async function downloadAllPhotos() {
+            if (currentPhotos.length === 0) return;
+            
+            btnDownloadAll.disabled = true;
+            btnDownloadAll.classList.add('opacity-50', 'cursor-wait');
+            
+            const zip = new JSZip();
+            const folderName = `ZX_TikTok_${currentAuthor}`;
+            const folder = zip.folder(folderName);
+            
+            let successCount = 0;
+
+            for (let i = 0; i < currentPhotos.length; i++) {
+                try {
+                    dlAllText.innerText = `Zipping (${i + 1}/${currentPhotos.length})...`;
+                    const blob = await fetchImageBlob(currentPhotos[i]);
+                    folder.file(`photo_${i + 1}.jpeg`, blob);
+                    successCount++;
+                } catch (error) {
+                    console.error(`Failed to zip photo ${i + 1}:`, error);
+                    showToast(`Warning: Skipped Photo ${i + 1} due to network error.`, 'error');
+                }
+            }
+
+            if (successCount === 0) {
+                showToast("Failed to download any photos.", "error");
+                btnDownloadAll.disabled = false;
+                btnDownloadAll.classList.remove('opacity-50', 'cursor-wait');
+                dlAllText.innerText = "Download All (ZIP)";
+                return;
+            }
+
+            dlAllText.innerText = "Generating ZIP...";
+            
+            try {
+                const content = await zip.generateAsync({ type: "blob" });
+                saveAs(content, `${folderName}.zip`);
+                showToast("ZIP Downloaded Successfully!", "success");
+            } catch (error) {
+                console.error("ZIP Generation Error:", error);
+                showToast("Failed to generate ZIP file.", "error");
+            } finally {
+                btnDownloadAll.disabled = false;
+                btnDownloadAll.classList.remove('opacity-50', 'cursor-wait');
+                dlAllText.innerText = "Download All (ZIP)";
+            }
+        }
+
+        // Add Enter key support for input
+        urlInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                processUrl();
+            }
+        });
+    </script>
+</body>
+</html>
